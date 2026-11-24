@@ -5,6 +5,7 @@ Site: Cloud.Google.com/dns
 Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gcloud
 Options:
  CLOUDSDK_ACTIVE_CONFIG_NAME Active config name. E.g. "default"
+ GCLOUD_DNS_VISIBILITY Zone visibility: public (default) or private. Saved in account.conf.
 Author: Janos Lenart <janos@lenart.io>
 '
 
@@ -19,6 +20,7 @@ dns_gcloud_add() {
   _debug txtvalue "$txtvalue"
 
   _dns_gcloud_find_zone || return $?
+  _saveaccountconf_mutable GCLOUD_DNS_VISIBILITY "$GCLOUD_DNS_VISIBILITY" || return $?
 
   # Add an extra RR
   _dns_gcloud_start_tr || return $?
@@ -128,6 +130,16 @@ _dns_gcloud_add_rrs() {
 }
 
 _dns_gcloud_find_zone() {
+  GCLOUD_DNS_VISIBILITY="${GCLOUD_DNS_VISIBILITY:-$(_readaccountconf_mutable GCLOUD_DNS_VISIBILITY)}"
+  GCLOUD_DNS_VISIBILITY="${GCLOUD_DNS_VISIBILITY:-public}"
+  case "$GCLOUD_DNS_VISIBILITY" in
+    public | private) ;;
+    *)
+      _err "GCLOUD_DNS_VISIBILITY must be public or private"
+      return 1
+      ;;
+  esac
+
   # Prepare a filter that matches zones that are suiteable for this entry.
   # For example, _acme-challenge.something.domain.com might need to go into something.domain.com or domain.com;
   # this function finds the longest postfix that has a managed zone.
@@ -137,7 +149,7 @@ _dns_gcloud_find_zone() {
     filter="$filter$part. "
     part="$(echo "$part" | sed 's/[^.]*\.*//')"
   done
-  filter="$filter) AND visibility=public"
+  filter="$filter) AND visibility=$GCLOUD_DNS_VISIBILITY"
   _debug filter "$filter"
 
   # List domains and find the zone with the deepest sub-domain (in case of some levels of delegation)
